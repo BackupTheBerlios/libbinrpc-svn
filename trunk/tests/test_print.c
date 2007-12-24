@@ -9,7 +9,7 @@ int main()
 #define BUFF_SIZE	1024
 	char buff[BUFF_SIZE];
 	brpc_t *req;
-	BRPC_STR_STATIC_INIT(mname, "MYmyethod");
+	BRPC_STR_STATIC_INIT(mname, "MYmethod");
 
 	assert((req = brpc_req(mname, 1234)));
 	assert(brpc_asm(req, "d<cc>d", 1, "ana", "mere", 2));
