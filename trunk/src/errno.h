@@ -28,6 +28,13 @@
 
 #include "tls.h"
 
+#ifndef EBADMSG
+#define	EBADMSG		0	/* Not a data message */
+#endif /* EBADMSG */
+#ifndef EPROTO
+#define EPROTO		0	/* Protocol error */
+#endif /* EPROTO */
+
 #define ELOCK	(INT_MAX - 1)
 #define ERESLV	(INT_MAX - 2)
 #define EFMT	(INT_MAX - 3)

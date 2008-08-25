@@ -20,11 +20,11 @@
 
 #include "log.h"
 
-static void black_hole(int prio, const char *fmt, ...) {}
-
 #ifdef USE_DEFAULT_SYSLOG
 void (*brpc_syslog)(int priority, const char *format, ...) = syslog;
 #else
+static void black_hole(int prio, const char *fmt, ...) {}
+
 void (*brpc_syslog)(int priority, const char *format, ...) = black_hole;
 #endif
 

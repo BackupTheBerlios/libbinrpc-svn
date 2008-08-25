@@ -20,10 +20,10 @@
 #ifndef __BINRPC_TLS_H__
 #define __BINRPC_TLS_H__
 
-#ifdef BINRPC_REENTRANT
+#ifdef _BINRPC_REENTRANT
 #	define __brpc_tls	__thread
-#else /*BINRPC_REENTRANT*/
+#else /*_BINRPC_REENTRANT*/
 #	define __brpc_tls	/* no TLS */
-#endif /*BINRPC_REENTRANT*/
+#endif /*_BINRPC_REENTRANT*/
 
 #endif /* __BINRPC_TLS_H__ */

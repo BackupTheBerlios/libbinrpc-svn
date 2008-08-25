@@ -8,16 +8,9 @@ install: install-lib install-include
 uninstall: uninstall-lib uninstall-include
 
 .PHONY: install-lib
-install-lib: install-lib-a install-lib-so
-
-.PHONY: install-lib-a
-install-lib-a: install-lib-a
+install-lib:
 	install -d ${prefix}/${INSTALL_LIB}
 	install src/lib${NAME}.a ${prefix}/${INSTALL_LIB}
-
-.PHONY: install-lib-so
-install-lib-so: install-lib-so
-	install -d ${prefix}/${INSTALL_LIB}
 	install src/lib${NAME}.so \
 			${prefix}/${INSTALL_LIB}/lib${NAME}.so.${MAJOR}.${MINOR}
 	cd ${prefix}/${INSTALL_LIB}/ && \

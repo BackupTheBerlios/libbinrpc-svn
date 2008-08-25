@@ -1,6 +1,6 @@
 
 
-NAME?=binrpc
+NAME=binrpc
 
 CC?=gcc
 AR?=ar
@@ -26,6 +26,8 @@ endif
 %.o: %.c %.d $(EXTRA_DEPS)
 	$(CC) $(CFLAGS) $(LIBFLAGS) -c $<
 
+OS=$(shell uname -s)
+
 INSTALL_PREFIX?=/usr
 INSTALL_INCLUDE?=/include
 INSTALL_LIB?=/lib
@@ -33,7 +35,7 @@ INSTALL_LIB?=/lib
 # versioning numbers
 MAJOR?=1
 MINOR?=0
-TAG?=1
+TAG?=2
 
 
 ###
@@ -42,22 +44,23 @@ TAG?=1
 # NDEBUG				:	release build
 # INT_AS_ID				:	allow integer records as attribute identifes 
 # 							(besides str)
-# DFIX_FALSE_GCC_WARNS	:	initialize some vars falsely signaled by GCC
+# FIX_FALSE_GCC_WARNS	:	initialize some vars falsely signaled by GCC
 # 							(4.1.1) as potentially used without.
 # 							(some may be triggered by pointer usage without
 # 							'const' or 'restrict' keyword)
-# BINRPC_REENTRANT		:	enable thread local storage variables (set them 
+# _BINRPC_REENTRANT		:	enable thread local storage variables (set them 
 # 							global)
-# NOP_DFL_LOCKS			:	hollow locking; if not set and reentrant,
+# LOCKS_INIT_NOP				:	hollow locking; if not set and reentrant,
 # 							realtime's locking system will be used
 # BINRPC_VER1_COMPAT	:	compatibility with version 1 (TODO: :) )
 # USE_DEFAULT_SYSLOG	:	use syslog as default logger, instead of black
 # 							hole
 #
 
-ifeq ($(mode),release)
+ifneq (,$(findstring release,$(mode)))
 	CFLAGS+=-O3 -DNDEBUG
-else
+endif
+ifneq (,$(findstring strict,$(mode)))
 	CFLAGS+=-Werror
 endif
 
@@ -65,17 +68,44 @@ CFLAGS+=-DBINRPC_LIB_VER=\"$(MAJOR).$(MINOR)-$(TAG)\"
 
 CFLAGS += \
 	-DINT_AS_ID \
+	#-D_BINRPC_REENTRANT \
 	#-DFIX_FALSE_GCC_WARNS \
-	#-DBINRPC_REENTRANT \
 
-ifeq (,$(findstring BINRPC_REENTRANT,$(CFLAGS)))
-	CFLAGS+=-DNOP_DFL_LOCKS
-else # BINRPC_REENTRANT
-ifeq (,$(findstring NOP_DFL_LOCKS,$(CFLAGS)))
+ifeq (,$(findstring _BINRPC_REENTRANT,$(CFLAGS)))
+	CFLAGS+=-DLOCKS_INIT_NOP
+else # _BINRPC_REENTRANT
+ifeq (,$(findstring LOCKS_INIT_NOP,$(CFLAGS)))
 	LDLIBS+=-lrt
-endif # NOP_DFL_LOCKS
-endif # BINRPC_REENTRANT
+endif # LOCKS_INIT_NOP
+endif # _BINRPC_REENTRANT
 
+
+ifeq ($(OS),Linux)
+CFLAGS+=-DHAVE_IPV4_MAPPED
+CFLAGS+=-DHAVE_GAI_ADDRCONFIG -DWITH_GAI_ADDRCONFIG
+CFLAGS+=-DHAVE_MSG_NOSIGNAL
+endif # OS:linux
+
+ifeq ($(OS),SunOS)
+CFLAGS+=-std=gnu99
+CFLAGS+=-DHAVE_IPV4_MAPPED
+CFLAGS+=-DHAVE_GAI_ADDRCONFIG -DWITH_GAI_ADDRCONFIG
+endif # OS:SunOS
+
+ifeq ($(OS),FreeBSD)
+CFLAGS+=-DHAVE_IN_SYSTM_H -DHAVE_IPV4_MAPPED
+CFLAGS+=-DHAVE_GAI_ADDRCONFIG -DWITH_GAI_ADDRCONFIG
+CFLAGS+=-DHAVE_MSG_NOSIGNAL
+endif # OS:FreeBSD
+
+ifeq ($(OS),NetBSD)
+CFLAGS+=-DHAVE_IN_SYSTM_H
+CFLAGS+=-DHAVE_MSG_NOSIGNAL
+endif # OS:NetBSD
+
+ifeq ($(OS),OpenBSD)
+CFLAGS+=-DHAVE_IN_SYSTM_H
+endif # OS:OpenBSD
 
 .PHONY: distclean tags
 

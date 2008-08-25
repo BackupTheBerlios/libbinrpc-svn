@@ -28,6 +28,9 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <limits.h>
+#ifdef HAVE_IN_SYSTM_H
+#include <netinet/in_systm.h>
+#endif
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <stdio.h>
@@ -40,8 +43,22 @@
 #include "misc.h"
 #include "net.h"
 
+
+#ifndef AF_LOCAL
+#define AF_LOCAL	AF_UNIX
+#endif
+#ifndef PF_LOCAL
+#define PF_LOCAL	PF_UNIX
+#endif
+#ifndef SUN_LEN
+# define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path)	      \
+		      + strlen ((ptr)->sun_path))
+#endif /* SUN_LEN */
+
+
 #define BRPC_SCHEME_PREF	"brpc"
 #define BRPC_SCHEME_POSTF	"://"
+
 
 __LOCAL bool resolve_inet(char *name, brpc_addr_t *addr)
 {
@@ -49,7 +66,15 @@ __LOCAL bool resolve_inet(char *name, brpc_addr_t *addr)
 	int res;
 
 	memset((char *)&hint, 0, sizeof(struct addrinfo));
-	hint.ai_flags = AI_PASSIVE|AI_ALL;
+	if (! name) /* TODO: possible? */
+		hint.ai_flags |= AI_PASSIVE;
+#ifdef HAVE_IPV4_MAPPED
+	if (addr->domain == AF_INET6)
+		hint.ai_flags |= AI_V4MAPPED;
+#endif
+#if defined(HAVE_GAI_ADDRCONFIG) && defined(WITH_GAI_ADDRCONFIG)
+	hint.ai_flags |= AI_ADDRCONFIG;
+#endif
 	hint.ai_family = addr->domain;
 	hint.ai_socktype = addr->socktype;
 
@@ -504,7 +529,6 @@ error:
 	return false;
 }
 
-
 /**
  * Error codes:
  * 	EINPROGRESS : timeout occured while something had been sent.
@@ -541,54 +565,27 @@ bool brpc_sendto(int sockfd, brpc_addr_t *dest, brpc_t *msg, brpc_tv_t tout)
 	still = buff->len;
 	offt = 0;
 
-#ifndef FIX_FALSE_GCC_WARNS
-	if (tout)
-#endif
-		prev = brpc_now();
-	while (still) {
-		FD_ZERO(&wset);
-		FD_SET(sockfd, &wset);
-
-		if (tout) {
-			now = brpc_now();
-			tout -= now - prev;
-			prev = now;
-			tv.tv_sec = tout / 1000000LU;
-			tv.tv_usec = tout - (tv.tv_sec * 1000000LU);
-		}
-		DBG("timer armed to %lu.\n", tout);
-
-		switch (select(sockfd + 1, NULL, &wset, NULL, tout ? &tv : NULL)) {
-			case 0:
-				if (offt)
-					WERRNO(EINPROGRESS);
-				else
-					WERRNO(ETIMEDOUT);
-				return false;
-			case 1:
-				break;
-			default:
-				switch (errno) {
-					case EINTR: /* signal delivered */
-						continue;
-					default:
-						/* EBADF, EINVAL */
-						WSYSERRNO;
-						return false;
-				}
-		}
-
+	prev = tout ? brpc_now() : 0;
+	do {
 		DBG("sending through FD#%d; to send: %zd.\n", sockfd, still);
-		if ((sent = sendto(sockfd, pos, still, MSG_DONTWAIT|MSG_NOSIGNAL, 
-				saddr, saddrlen)) < 0) {
-			switch (errno) {
-				/* transient errors */
-				case EAGAIN: /* would block - strange one */
-#if EAGAIN != EWOULDBLOCK
-				case EWOULDBLOCK:
+		if ((sent = sendto(sockfd, pos, still, MSG_DONTWAIT
+#ifdef HAVE_MSG_NOSIGNAL
+				|MSG_NOSIGNAL
 #endif
-					WARN("sendto failed with EAGAIN|EWOULDBLOCK after "
-							"select.\n");
+				, saddr, saddrlen)) <= 0) {
+			switch (errno) {
+				case 0:
+					/* should never happen (don't send empty datagrams) */
+					BUG("sendto() returned %zd, but no error signaled.\n", 
+							sent);
+					assert(still);
+#ifndef NDEBUG
+					abort();
+#endif
+						
+					return false;
+
+				/* (potentially) transient errors */
 				case EINTR: /* signal delivered */
 				case ENOBUFS:
 				case ENOMEM:
@@ -607,17 +604,54 @@ bool brpc_sendto(int sockfd, brpc_addr_t *dest, brpc_t *msg, brpc_tv_t tout)
 				default:
 					WSYSERRNO;
 					return false;
+
+				case EAGAIN:
+#if EAGAIN != EWOULDBLOCK
+				case EWOULDBLOCK:
+#endif
+					FD_ZERO(&wset);
+					FD_SET(sockfd, &wset);
+					if (prev) {
+						now = brpc_now();
+						tout -= now - prev;
+						prev = now;
+						tv.tv_sec = tout / 1000000LU;
+						tv.tv_usec = tout - (tv.tv_sec * 1000000LU);
+					}
+#ifdef NET_DEBUG
+					DBG("select timer armed (tout: %lu).\n", tout);
+#endif
+					switch (select(sockfd + 1, NULL, &wset, NULL, 
+							prev ? &tv : NULL)) {
+						case 0:
+							if (offt)
+								WERRNO(EINPROGRESS);
+							else
+								WERRNO(ETIMEDOUT);
+							return false;
+						case 1:
+							break;
+						default:
+							switch (errno) {
+								case EINTR: /* signal delivered */
+									continue;
+								default:
+									/* EBADF, EINVAL */
+									WSYSERRNO;
+									return false;
+							}
+					}
+				break;
 			}
 		} else {
 			pos += sent;
 			still -= sent;
 		}
-	}
+	} while (still);
 
 	DBG("full message buffer sent.\n");
 	return true;
 }
-
 
 
 /**
@@ -675,8 +709,13 @@ brpc_t *brpc_recvfrom(int sockfd, brpc_addr_t *src, brpc_tv_t tout)
 		DBG("receiving through FD#%d; rcvd: %zd; room for: %zd.\n", sockfd, 
 				offt, msglen - offt);
 #endif
-		if (0 < (rcvd = recvfrom(sockfd, pos, msglen - offt, 
-				MSG_DONTWAIT|MSG_NOSIGNAL, saddr, addrlen))) {
+		/* first do receive and only then, if needed, select(); this ensures
+		 * that if data to read exist, no un-necessary syscalls are invoked  */
+		if (0 < (rcvd = recvfrom(sockfd, pos, msglen - offt, MSG_DONTWAIT
+#ifdef HAVE_MSG_NOSIGNAL
+				|MSG_NOSIGNAL
+#endif
+				, saddr, addrlen))) {
 			pos += rcvd;
 			offt += rcvd;
 
@@ -690,7 +729,7 @@ brpc_t *brpc_recvfrom(int sockfd, brpc_addr_t *src, brpc_tv_t tout)
 						msglen = buff_need;
 				} else if (BINRPC_MAX_PKT_LEN < have_len) {
 					/* TODO: try to read all the packet if still have time,
-					 * so that the socket remain usable */
+					 * so that the socket remains usable */
 					WERRNO(EMSGSIZE);
 					return NULL;
 				} else {
@@ -707,9 +746,12 @@ brpc_t *brpc_recvfrom(int sockfd, brpc_addr_t *src, brpc_tv_t tout)
 						return NULL;
 					}
 					/* should never happen */
-					BUG("recvfrom returned %zd, but no error signaled.\n", 
+					BUG("recvfrom() returned %zd, but no error signaled.\n", 
 							rcvd);
+#ifndef NDEBUG
 					abort();
+#endif
+					return NULL;
 				case ENOBUFS:
 				case ENOMEM: /* TODO: does this realy make sense? */
 				case EINTR:
@@ -731,10 +773,10 @@ eagain:
 						prev = now;
 						tv.tv_sec = tout / 1000000LU;
 						tv.tv_usec = tout - (tv.tv_sec * 1000000LU);
-#ifdef NET_DEBUG
-						DBG("select timer armed (tout: %lu).\n", tout);
-#endif
 					}
+#ifdef NET_DEBUG
+					DBG("select timer armed (tout: %lu).\n", tout);
+#endif
 					switch (select(sockfd + 1, &rset, NULL, NULL, 
 							prev ? &tv : NULL)) {
 						case 0:

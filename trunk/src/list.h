@@ -402,9 +402,11 @@ static inline void list_splice_init(struct brpc_list_head *list,
  * @member:	the name of the member within the struct.
  *
  */
-#define brpc_container_of(ptr, type, member) ({			\
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
-        (type *)( (char *)__mptr - brpc_offsetof(type,member) );})
+#define brpc_container_of(ptr, type, member) \
+	({	\
+		const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+		(type *)( (char *)__mptr - brpc_offsetof(type,member) );	\
+	})
 
 /**
  * brpc_list_entry - get the struct for this entry
@@ -425,7 +427,7 @@ static inline void list_splice_init(struct brpc_list_head *list,
 //	for (pos = (head)->next; pos != (head);
 #define list_for_each(pos, head) \
 	for (pos = (head)->next; prefetch(pos->next), pos != (head); \
-        	pos = pos->next)
+			pos = pos->next)
 
 /**
  * __list_for_each	-	iterate over a list

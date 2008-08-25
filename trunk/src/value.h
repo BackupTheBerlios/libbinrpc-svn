@@ -329,8 +329,8 @@ brpc_val_t *brpc_val_clone(const brpc_val_t *orig);
 #define BRPC_STR_STATIC_INIT(name, _cstr_) \
 		static brpc_str_t name = {_cstr_, sizeof(_cstr_)}
 #define BRPC_STR_FMT(_str_) \
-		(int)((_str_) ? (_str_)->len : (sizeof("(nil)") - /*0-term*/1)), \
-		(_str_) ? (_str_)->val : "(nil)"
+		(int)((_str_ != (brpc_str_t *)0) ? (_str_)->len : (sizeof("(nil)") - /*0-term*/1)), \
+		(_str_ != (brpc_str_t *)0) ? (_str_)->val : "(nil)"
 #define BRPC_STR_EQ(_a_, _b_) \
 	(((_a_)->len == (_b_)->len) && \
 	(strncmp((_a_)->val, (_b_)->val, (_b_)->len) == 0))

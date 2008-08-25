@@ -17,7 +17,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef NOP_DFL_LOCKS
+#ifndef LOCKS_INIT_NOP
 #include <semaphore.h>
 #endif
 
@@ -28,21 +28,21 @@
 /* forward declaration */
 static brpc_lock_t *_brpc_lock_new(void);
 static int _brpc_loc_del(brpc_lock_t *lock);
-#ifdef NOP_DFL_LOCKS
+#ifdef LOCKS_INIT_NOP
 static int _brpc_lock_get(brpc_lock_t *lock);
 static int _brpc_lock_let(brpc_lock_t *lock);
-#endif /* NOP_DFL_LOCKS */
+#endif /* LOCKS_INIT_NOP */
 
 static int locking_model = BRPC_LOCK_PROCESS;
 
 brpc_lock_new_f brpc_lock_new = _brpc_lock_new;
-#ifndef NOP_DFL_LOCKS
+#ifndef LOCKS_INIT_NOP
 brpc_lock_get_f brpc_lock_get = (brpc_lock_get_f)sem_wait;
 brpc_lock_let_f brpc_lock_let = (brpc_lock_let_f)sem_post;
-#else /* NOP_DFL_LOCKS */
+#else /* LOCKS_INIT_NOP */
 brpc_lock_get_f brpc_lock_get = _brpc_lock_get;
 brpc_lock_let_f brpc_lock_let = _brpc_lock_let;
-#endif /* NOP_DFL_LOCKS */
+#endif /* LOCKS_INIT_NOP */
 brpc_lock_del_f brpc_lock_del = _brpc_loc_del;
 
 
@@ -63,7 +63,7 @@ void brpc_locking_model(enum BINRPC_LOCKING_MODEL model)
 	locking_model = model;
 }
 
-#ifndef NOP_DFL_LOCKS
+#ifndef LOCKS_INIT_NOP
 static brpc_lock_t *_brpc_lock_new(void)
 {
 	brpc_lock_t *lock;
@@ -98,7 +98,7 @@ static int _brpc_loc_del(brpc_lock_t *lock)
 	return 0;
 }
 
-#else /* NOP_DFL_LOCKS */
+#else /* LOCKS_INIT_NOP */
 
 
 static brpc_lock_t *_brpc_lock_new(void) { return (brpc_lock_t *)-1; }
@@ -106,5 +106,5 @@ static int _brpc_lock_get(brpc_lock_t *lock) { return 0; }
 static int _brpc_lock_let(brpc_lock_t *lock) { return 0; }
 static int _brpc_loc_del(brpc_lock_t *lock) { return 0; }
 
-#endif /* NOP_DFL_LOCKS */
+#endif /* LOCKS_INIT_NOP */
 
