@@ -26,6 +26,7 @@
 __brpc_tls int brpc_errno = 0;
 
 #define ERR_BUFF_SIZE	1024
+#define ERR_UNKNOWN		"(unknown error)"
 
 #ifndef NDEBUG
 __brpc_tls char *brpc_efile = __FILE__;
@@ -35,21 +36,35 @@ __brpc_tls int brpc_eline = 0;
 char *brpc_strerror()
 {
 	static __brpc_tls char buff[ERR_BUFF_SIZE];
+#ifdef _BINRPC_REENTRANT
+	static __brpc_tls char strerrbuff[ERR_BUFF_SIZE];
+#endif
 	char *msg;
 	switch (brpc_errno) {
 		case ELOCK: msg = "Locking subsystem error"; break;
 		case ERESLV: msg = "DNS resolution failure"; break;
 		case EFMT: msg = "Descriptor - structure missmatch"; break;
-#ifdef BINRPC_REENTRANT
-		default: msg = strerror_r(brpc_errno); break;
+#ifdef _BINRPC_REENTRANT
+		default: 
+			if (strerror_r(brpc_errno, strerrbuff, sizeof(ERR_BUFF_SIZE)))
+				return ERR_UNKNOWN;
+			else
+				msg = strerrbuff;
+			break;
 #else
-		default: msg = strerror(brpc_errno); break;
+		default: 
+			if (! (msg = strerror(brpc_errno)))
+				return ERR_UNKNOWN; 
+			break;
 #endif
 	}
 #ifndef NDEBUG
-	snprintf(buff, ERR_BUFF_SIZE, "%s [%s:%d]", msg, brpc_efile, brpc_eline);
+	if (snprintf(buff, ERR_BUFF_SIZE, "%s [%s:%d]", msg, brpc_efile, 
+			brpc_eline) < 0)
+		return ERR_UNKNOWN;
 #else
-	snprintf(buff, ERR_BUFF_SIZE, "%s", msg);
+	if (snprintf(buff, ERR_BUFF_SIZE, "%s", msg) < 0)
+		return ERR_UNKNOWN;
 #endif
 	return buff;
 }
