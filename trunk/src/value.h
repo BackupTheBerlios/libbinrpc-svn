@@ -121,9 +121,11 @@ brpc_val_t *brpc_seq(brpc_vtype_t type, ...);
 		brpc_list_entry(_list_, brpc_val_t, val.seq.list)
 
 
+brpc_val_t *brpc_val_deser(uint8_t **, const uint8_t *);
+uint8_t* brpc_val_ser(brpc_val_t *, uint8_t *, const uint8_t *);
+
 #ifdef _LIBBINRPC_BUILD
-brpc_val_t *brpc_val_deserialize(uint8_t **, const uint8_t *);
-uint8_t* brpc_val_serialize(brpc_val_t *, uint8_t *, const uint8_t *);
+
 bool brpc_vals_repr(struct brpc_list_head *head, brpc_str_t *buff, 
 		ssize_t *pos);
 
@@ -241,6 +243,37 @@ brpc_val_t *brpc_val_clone(const brpc_val_t *orig);
  */
 #define brpc_empty_avp()	brpc_seq(BRPC_VAL_AVP, NULL)
 
+/**
+ * Serializes a BinRPC value.
+ * @param _val_ The binrpc value to serialize.
+ * @param _into_ String buffer where to serialize the value.
+ * @param _len Lenght of the string buffer.
+ * @return How many characters have been written into the buffer.
+ */
+#define brpc_val_serialize(_val_, _into_, _len)	\
+	({ \
+		uint8_t *__into = (uint8_t *)(_into_); \
+		uint8_t *__pos = brpc_val_ser(_val_, __into, __into + (_len)); \
+		ssize_t __written = __pos ? __pos - __into : -1; \
+		__written; \
+	})
+
+/**
+ * Deserializes a string buffer into a BinRPC value.
+ * @param _from_ The string buffer.
+ * @param _len The lenght of the string buffer.
+ * @return The BinrRPC value.
+ */
+#define brpc_val_deserialize(_from_, _len) \
+	({ \
+		uint8_t *__start_at = (uint8_t *)(_from_); \
+		brpc_val_t *ret = brpc_val_deser(&__start_at, __start_at + (_len)); \
+		ret; \
+	})
+
+ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t len);
+
+
 /*
  * Access records (ro).
  */
@@ -321,6 +354,14 @@ brpc_val_t *brpc_val_clone(const brpc_val_t *orig);
  * @param _val_ Reference to sequence.
  */
 #define brpc_val_seqcnt(_val_)		((const size_t)(_val_)->val.seq.cnt)
+
+/**
+ * Fetches the index'th value in the sequence value.
+ * @param call The BinRPC wrapping value to get the inner value from.
+ * @param index The index, starting at 0, of the value to be fetched
+ * @return The BINRPC value, or NULL if not found (unavailale index).
+ */
+brpc_val_t *brpc_val_fetch_val(brpc_val_t *seq, size_t index);
 
 /**
  * Misc functions.

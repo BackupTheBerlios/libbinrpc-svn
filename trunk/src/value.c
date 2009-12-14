@@ -249,7 +249,7 @@ error:
 }
 
 
-brpc_val_t *brpc_val_deserialize(uint8_t **_pos, const uint8_t *end)
+brpc_val_t *brpc_val_deser(uint8_t **_pos, const uint8_t *end)
 {
 	unsigned char hdr;
 	uint8_t *rec_limit, *pos;
@@ -387,10 +387,10 @@ __LOCAL brpc_val_t *decode_avp(uint8_t **_start, const uint8_t *end)
 {
 	brpc_val_t *name, *val, *new_rec;
 
-	name = brpc_val_deserialize(_start, end);
+	name = brpc_val_deser(_start, end);
 	if (! name)
 		return NULL;
-	val = brpc_val_deserialize(_start, end);
+	val = brpc_val_deser(_start, end);
 	if (! val) {
 		brpc_val_free(name);
 		return NULL;
@@ -424,7 +424,7 @@ __LOCAL brpc_val_t *decode_seq(uint8_t **_start, const uint8_t *end,
 	seq_val->locked = true;
 
 	while (*_start < end) {
-		sub_val = brpc_val_deserialize(_start, end);
+		sub_val = brpc_val_deser(_start, end);
 		if (! sub_val)
 			/* TODO: support for struct terminator (0x83) */
 			goto error;
@@ -611,7 +611,7 @@ bool brpc_avp_add(brpc_val_t *avp, brpc_val_t *_member)
 	return true;
 }
 
-uint8_t* brpc_val_serialize(brpc_val_t *val, uint8_t *start, 
+uint8_t* brpc_val_ser(brpc_val_t *val, uint8_t *start, 
 		const uint8_t *end)
 {
 	DBG("serializing BINRPC value of type %d.\n", val->type);
@@ -780,7 +780,7 @@ __LOCAL uint8_t *serialize_content(brpc_val_t *val, uint8_t *pos,
 		case BRPC_VAL_MAP:
 		case BRPC_VAL_LIST:
 			list_for_each(k, &val->val.seq.list) {
-				pos = brpc_val_serialize(_BRPC_VAL4LIST(k), pos, end);
+				pos = brpc_val_ser(_BRPC_VAL4LIST(k), pos, end);
 				if (! pos)
 					return NULL;
 			}
@@ -905,3 +905,27 @@ bool brpc_vals_repr(struct brpc_list_head *head, brpc_str_t *repr, ssize_t *pos)
 	return true;
 }
 
+ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t len)
+{
+	brpc_str_t repr = {into, len};
+	ssize_t pos = 0;
+	if (repr_val(val, &repr, &pos))
+		return pos;
+	return -1;
+}
+
+brpc_val_t *brpc_val_fetch_val(brpc_val_t *seq, size_t index)
+{
+	struct brpc_list_head *k;
+	size_t idx = 0;
+	if (index < 0) {
+		WERRNO(EINVAL);
+		return NULL;
+	}
+	list_for_each(k, &brpc_seq_cells(seq)) {
+		if (idx == index)
+			return _BRPC_VAL4LIST(k);
+		idx ++;
+	}
+	return NULL;
+}

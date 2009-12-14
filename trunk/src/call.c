@@ -18,7 +18,6 @@
  */
 
 
-
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
@@ -178,8 +177,6 @@ void brpc_finish(brpc_t *call)
 {
 	struct brpc_list_head *k, *tmp;
 
-	if ( call == NULL ) return;
-
 	list_for_each_safe(k, tmp, &call->vals.list) {
 		list_del(k);
 		brpc_val_free(_BRPC_VAL4LIST(k));
@@ -206,14 +203,16 @@ brpc_val_t *brpc_fetch_val(brpc_t *call, size_t index)
 {
 	struct brpc_list_head *k;
 	size_t idx = 0;
-	if (brpc_type(call) == BRPC_CALL_REQUEST)
+
+	if (index < 0) {
+		WERRNO(EINVAL);
+		return NULL;
+	} else if (brpc_type(call) == BRPC_CALL_REQUEST)
 		index ++; /* first is the method name */
 	list_for_each(k, &call->vals.list) {
-		if (idx != index) {
-			idx ++;
-			continue;
-		}
-		return _BRPC_VAL4LIST(k);
+		if (idx == index) 
+			return _BRPC_VAL4LIST(k);
+		idx ++;
 	}
 	return NULL;
 }
@@ -245,7 +244,7 @@ const brpc_bin_t *brpc_serialize(brpc_t *call)
 	pos = buff;
 	end = buff + sizeof(buff);
 	list_for_each(k, &call->vals.list) {
-		pos = brpc_val_serialize(_BRPC_VAL4LIST(k), pos, end);
+		pos = brpc_val_ser(_BRPC_VAL4LIST(k), pos, end);
 		if (! pos)
 			return NULL;
 	}
@@ -346,7 +345,7 @@ brpc_t *brpc_raw(uint8_t *buff, size_t len)
 	}
 
 	if (flags & (BRPC_FLG_2 | BRPC_FLG_3))
-		WARN("message using reserved flags #2&3.\n");
+		WARN("message using reserved flags #2&#3.\n");
 		
 	ll = PLOAD_LEN_LEN(*pos);
 	cl = COOKIE_LEN(*pos);
@@ -495,7 +494,7 @@ bool brpc_unpack(brpc_t *call)
 			return false;
 
 	while (call->pos < end) {
-		new_val = brpc_val_deserialize(&call->pos, end);
+		new_val = brpc_val_deser(&call->pos, end);
 		if (! new_val)
 			goto error;
 		_brpc_add_val(call, new_val);
@@ -526,7 +525,7 @@ bool brpc_unpack_method(brpc_t *req)
 		return true;
 	}
 
-	meth = brpc_val_deserialize(&req->pos, req->nbuf.val + req->nbuf.len);
+	meth = brpc_val_deser(&req->pos, req->nbuf.val + req->nbuf.len);
 	if (! meth) {
 		WERRNO(EBADMSG);
 		ERR("request #%u lacks method name.\n", req->id);
@@ -672,8 +671,7 @@ bool brpc_asm(brpc_t *call, const char *fmt, ...)
 	((use_va) ? va_arg(ap, type) : (type)v_args[v_pos ++])
 /* integer fetch */
 #define IAFETCH(type) \
-	((use_va) ? va_arg(ap, type) : \
-	(type)(intptr_t)v_args[v_pos ++])
+	((use_va) ? va_arg(ap, type) : (type)(intptr_t)v_args[v_pos ++])
 
 #ifdef FIX_FALSE_GCC_WARNS
 	v_pos = 0;
@@ -683,7 +681,7 @@ bool brpc_asm(brpc_t *call, const char *fmt, ...)
 	PUSH(&lst);
 	use_va = true;
 	va_start(ap, fmt);
-	while (*fmt)
+	while (*fmt) {
 		switch ((spec = *fmt++)) {
 			case '!':
 				if (! use_va) {
@@ -788,6 +786,7 @@ bool brpc_asm(brpc_t *call, const char *fmt, ...)
 						"`%c%s'.\n", spec, spec, fmt);
 				goto error;
 		}
+	}
 	va_end(ap);
 	POP(BRPC_VAL_LIST);
 
