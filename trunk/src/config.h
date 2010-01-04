@@ -22,7 +22,7 @@
 #define __BRPC_CONFIG_H__
 
 /* maximum supported size of a packet */
-#define BINRPC_MAX_PKT_LEN	(1<<14)
+#define BINRPC_MAX_PKT_LEN	((1<<16) - 1)
 /* 'standard' BINRPC port */
 #define BINRPC_PORT			2046
 

@@ -271,7 +271,21 @@ brpc_val_t *brpc_val_clone(const brpc_val_t *orig);
 		ret; \
 	})
 
-ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t len);
+/**
+ * Build the string representation of the value.
+ * @param val BINRPC value to get the representation of.
+ * @param len Out-paramter: in: holding string's lenght; out: how much was 
+ * written, including the 0-term.
+ * @return The total length of the representation, including the 0-term (might
+ * be larger then 'out' *len), or negative, on error.
+ *  i : integer type
+ *  s : string type
+ *  b : binary type
+ *  <>: avp grouping
+ *  {}: map grouping
+ *  []: list grouping
+ */
+ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t *len);
 
 
 /*

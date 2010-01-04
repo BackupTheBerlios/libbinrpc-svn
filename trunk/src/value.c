@@ -731,7 +731,8 @@ __LOCAL uint8_t *serialize_complex(brpc_val_t *val, uint8_t *pos,
 	size_t clen, avail, lensize;
 
 	start = pos;
-	pos = serialize_content(val, pos, end);
+	if (! (pos = serialize_content(val, pos, end)))
+		return NULL;
 
 	clen = pos - start;
 	avail = end - pos;
@@ -905,12 +906,31 @@ bool brpc_vals_repr(struct brpc_list_head *head, brpc_str_t *repr, ssize_t *pos)
 	return true;
 }
 
-ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t len)
+ssize_t brpc_val_repr(brpc_val_t *val, char *into, size_t *len)
 {
-	brpc_str_t repr = {into, len};
-	ssize_t pos = 0;
-	if (repr_val(val, &repr, &pos))
+	brpc_str_t repr = {0, 0};
+	ssize_t cp, zoff, pos = 0;
+
+	if ((! into) || (! len) || (! *len)) {
+		WERRNO(EINVAL);
+		goto err;
+	}
+
+	if (repr_val(val, &repr, &pos)) {
+		if (pos + 1 < *len) {
+			cp = pos;
+			zoff = pos;
+			*len = pos + 1;
+		} else {
+			cp = *len - 2;
+			zoff = *len -1;
+		}
+		memcpy(into, repr.val, cp);
+		into[zoff] = 0;
+		brpc_free(repr.val);
 		return pos;
+	}
+err:
 	return -1;
 }
 
